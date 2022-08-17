@@ -9,7 +9,10 @@ from Errors import InvalidGradeError
 from Student import Student
 from StudentData import StudentData
 
+from termcolor import colored
 # establish and connect to a MySQL database
+
+#MySQL login information should be stored in a JSON file, in my case called login.json
 json_login_file_path = Path("login.json")
 with json_login_file_path.open() as json_login_file:
     login_data = json.load(json_login_file)
@@ -60,8 +63,7 @@ def get_letter_grade(grade):
     else:
         return "A+"
         
-
-def add_student_to_gradebook():
+def add_student_to_gradebook(students: list[Student]):
     while True:
         first_name = input("Enter first name: ")
         last_name = input("Enter last name: ")
@@ -85,21 +87,13 @@ def insert_student_to_gradebook(first_name, last_name, grade, letter_grade, test
         print("STUDENTS:")
         for row in cursor:
             print(row)
-        print("GRADES:")
-        cursor.execute("select * from grades")
-        for row in cursor:
-            print(row)
         print("Updated database!")
     except mysql.connector.Error as err:
         print(f"Could not insert row: {err.msg}")
         exit()
 
 def add_new_student_grade(students: list[Student]):
-    student_names = {}
-    for student in students:
-        student_names[student.id] = student.first_name + " " + student.last_name
-    for id, name in sorted(student_names.items()):
-        print(f"{id}: {name}")
+    print_student_ID_and_names(students)
     student_id = int(input("Please enter the ID of the student you want to add a grade to: "))
     test_number = int(input("Please enter the test number: "))
     new_grade = float(input("Please enter the grade you want to give: "))
@@ -122,6 +116,12 @@ def add_new_student_grade(students: list[Student]):
         print(f"Could not insert row: {err.msg}")
         exit()
 
+def print_student_ID_and_names(students: list[Student]):
+    student_names = {}
+    for student in students:
+        student_names[student.id] = student.first_name + " " + student.last_name
+    for id, name in sorted(student_names.items()):
+        print(f"{id}: {name}")
 
 def get_studentID_from_gradebook(): #TODO: make this function work
     cursor.execute("select * from students")
@@ -133,6 +133,37 @@ def retrieve_all_students_data() -> StudentData:
     cursor.execute("select * from students")
     return StudentData(cursor)
 
+def retrieve_student_info(students: list[Student]):
+    print_student_ID_and_names(students)
+    student_id = int(input("Please enter the ID of the student you want to retrieve: "))
+    cursor.execute("select * from students where id = %s", (student_id,))
+    for row in cursor:
+        print(f"\nInformation for Student {student_id}: {row}\n")
+    
+    # get the column names of the table to display them with the row information
+    cursor.execute("select * from grades where student_id = %s", (student_id,))
+    print(f"Test grades from Student {student_id}:")
+    print_table_info(cursor)
+     
+def get_class_average(students: list[Student]):
+    print()
+    for student in students:
+        print(f"{student.first_name} {student.last_name} has an average grade of {student.average}")
+    print(f"\nClass average: {sum([student.average for student in students]) / len(students)}")
+
+def get_all_student_info(students: list[Student]):
+    for student in students:
+        print(f"\nStudent #{student.id}: {student.first_name} {student.last_name} - Average: {student.average} | {get_letter_grade(student.average)}\n")
+        cursor.execute("select * from grades where student_id = %s", (student.id,))
+        print(f"{student.first_name} {student.last_name}'s test grades:")
+        print_table_info(cursor)
+
+def print_table_info(cursor: mysql.connector.cursor):
+    # get the column names of the table to display them with the row information
+    columns = cursor.description
+    result = [{columns[index][0]:column for index, column in enumerate(value)} for value in cursor.fetchall()]
+    for row in result:
+        print(row)
 
 cursor = db.cursor(buffered=True)
 # cheetsheet for SQL commands
@@ -149,30 +180,26 @@ while True:
     # A. done
     # B. done
     option = input(
-    """Choose an option (type "Exit" to exit):
-    A. Add a student 
-    B. Give an existing student a new grade
-    C. Retrieve a student's information
-    D. Get the average of all students
-    E. Retrieve every student's information""").upper()
+    """Choose an option (type "Exit" to exit):\n
+    A. Add a student to the gradebook\n
+    B. Give an existing student a new grade\n
+    C. Retrieve a student's information\n
+    D. Get the average of all students\n
+    E. Retrieve every student's information\n""").upper()
     
     options = {
         "A": add_student_to_gradebook,
         "B": add_new_student_grade,
-        "C": 5,#retrieve_student_info,
-        "D": 5,#get_all_average_grade,
-        "E": 5#get_all_student_info
+        "C": retrieve_student_info,
+        "D": get_class_average,
+        "E": get_all_student_info
     }
 
     try:
-        if option.lower() == "exit":
+        if option == "EXIT":
             exit()
         options[option](student_data.students)
+        input("\nPress enter to continue...\n")
     except KeyError:
         print(f"Invalid option: {option} \n Error: {KeyError}")
         exit()
-            
-
-
-
-
